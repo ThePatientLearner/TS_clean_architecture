@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apuntes — Clean Architecture con TypeScript (clean-orders-ts)</title>
+<style>
+  :root {
+    --bg: #f6f7fb;
+    --card: #ffffff;
+    --text: #23272f;
+    --muted: #5f6673;
+    --border: #e3e6ee;
+    --accent: #4f6df5;
+    /* Colores por capa (los usaremos en TODOS los diagramas para que
+       siempre reconozcas de qué capa hablamos) */
+    --domain: #f5c518;     /* amarillo  = Dominio */
+    --domain-bg: #fdf6d8;
+    --app: #e8604c;        /* rojo/coral = Aplicación */
+    --app-bg: #fde5e0;
+    --infra: #3b82c4;      /* azul      = Infraestructura */
+    --infra-bg: #dcebf7;
+    --comp: #3fa66a;       /* verde     = Composición */
+    --comp-bg: #ddf2e5;
+    --code-bg: #1e2430;
+    --code-text: #d8dee9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.65;
+  }
+  header {
+    background: linear-gradient(135deg, #2b3245, #3c4763);
+    color: #fff;
+    padding: 28px 24px 18px;
+  }
+  header h1 { margin: 0 0 6px; font-size: 1.5rem; }
+  header p { margin: 0; opacity: .85; font-size: .95rem; max-width: 900px; }
+
+  nav {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    display: flex; flex-wrap: wrap; gap: 4px;
+    padding: 8px 16px;
+  }
+  .tab-btn {
+    border: 1px solid transparent;
+    background: transparent;
+    padding: 7px 13px;
+    border-radius: 8px;
+    font-size: .9rem;
+    cursor: pointer;
+    color: var(--muted);
+    font-family: inherit;
+  }
+  .tab-btn:hover { background: var(--bg); color: var(--text); }
+  .tab-btn.active { background: var(--accent); color: #fff; }
+
+  main { max-width: 1000px; margin: 0 auto; padding: 24px 20px 80px; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; animation: fade .25s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: none; } }
+
+  h2 { font-size: 1.45rem; margin: 8px 0 4px; }
+  h3 { font-size: 1.12rem; margin: 34px 0 8px; }
+  h4 { margin: 22px 0 6px; }
+  p, li { color: var(--text); }
+  .lead { color: var(--muted); font-size: 1.02rem; margin-top: 0; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin: 16px 0;
+  }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 760px){ .grid2 { grid-template-columns: 1fr; } }
+
+  /* Cajas de idea/analogía/aviso */
+  .tip, .warn, .idea {
+    border-radius: 10px; padding: 12px 16px; margin: 14px 0; font-size: .95rem;
+  }
+  .idea { background: #eef2ff; border-left: 4px solid var(--accent); }
+  .tip  { background: #e8f7ee; border-left: 4px solid var(--comp); }
+  .warn { background: #fff4e0; border-left: 4px solid #e8a13c; }
+
+  /* Etiquetas de capa */
+  .chip {
+    display: inline-block; padding: 1px 10px; border-radius: 999px;
+    font-size: .78rem; font-weight: 600; vertical-align: middle;
+  }
+  .chip.domain { background: var(--domain-bg); color: #8a6d00; }
+  .chip.app    { background: var(--app-bg); color: #a03322; }
+  .chip.infra  { background: var(--infra-bg); color: #1d5a94; }
+  .chip.comp   { background: var(--comp-bg); color: #1e6f42; }
+
+  /* Código */
+  pre {
+    background: var(--code-bg); color: var(--code-text);
+    padding: 14px 16px; border-radius: 10px;
+    overflow-x: auto; font-size: .85rem; line-height: 1.55;
+  }
+  code { font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace; }
+  p code, li code, td code {
+    background: #e9ecf3; color: #2f3542; padding: 1px 6px; border-radius: 5px; font-size: .86em;
+  }
+  pre .c  { color: #7f9463; font-style: italic; }   /* comentario */
+  pre .k  { color: #c792ea; }                        /* keyword */
+  pre .s  { color: #ecc48d; }                        /* string */
+  pre .f  { color: #82aaff; }                        /* función/clase */
+
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: .92rem; background: var(--card); }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #eef0f6; }
+
+  /* Diagrama de flujo vertical */
+  .flow { display: flex; flex-direction: column; align-items: stretch; gap: 0; margin: 18px 0; }
+  .fstep {
+    border: 2px solid var(--border); border-radius: 10px;
+    padding: 12px 16px; background: var(--card); position: relative;
+  }
+  .fstep .who { font-weight: 700; font-size: .95rem; }
+  .fstep .what { color: var(--muted); font-size: .9rem; margin-top: 2px; }
+  .fstep.l-domain { border-color: var(--domain); background: var(--domain-bg); }
+  .fstep.l-app    { border-color: var(--app);    background: var(--app-bg); }
+  .fstep.l-infra  { border-color: var(--infra);  background: var(--infra-bg); }
+  .fstep.l-comp   { border-color: var(--comp);   background: var(--comp-bg); }
+  .farrow {
+    align-self: center; color: var(--muted); font-size: 1.1rem;
+    padding: 2px 0; line-height: 1;
+  }
+  .farrow small { font-size: .78rem; display: block; }
+
+  /* enlaces internos entre pestañas */
+  a.xref { color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+
+  .svgwrap { overflow-x: auto; margin: 14px 0; }
+  .svgwrap svg { display: block; margin: 0 auto; }
+  .svgwrap svg text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+
+  .filetree { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: .84rem; line-height: 1.8; background: var(--code-bg); color: var(--code-text); border-radius: 10px; padding: 14px 18px; overflow-x: auto; white-space: pre; }
+  .filetree .d { color: #f5c518; }
+  .filetree .a { color: #ef8a76; }
+  .filetree .i { color: #7db3e8; }
+  .filetree .co { color: #6fce96; }
+  .filetree .cm { color: #8a93a5; }
+
+  .kbd { background:#e9ecf3; border:1px solid var(--border); border-bottom-width:2px; border-radius:6px; padding:0 6px; font-family: ui-monospace, monospace; font-size:.85em; }
+  footer { text-align:center; color: var(--muted); font-size: .82rem; padding: 20px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🧅 Clean Architecture con TypeScript — Apuntes del proyecto <code style="background:rgba(255,255,255,.15);padding:2px 8px;border-radius:6px;">clean-orders-ts</code></h1>
+  <p>Una guía visual, pestaña a pestaña, de cómo funciona esta aplicación de pedidos: qué hace cada capa, cómo se conecta todo y qué significa el TypeScript que vas a ver. Empieza por «Visión general» y avanza en orden; cada pestaña enlaza con las demás.</p>
+</header>
+
+<nav id="tabs">
+  <button class="tab-btn active" data-tab="t-vision"  onclick="goTo('t-vision')">🏠 Visión general</button>
+  <button class="tab-btn" data-tab="t-capas"   onclick="goTo('t-capas')">🧅 Las capas</button>
+  <button class="tab-btn" data-tab="t-viaje"   onclick="goTo('t-viaje')">🚀 El viaje de una petición</button>
+  <button class="tab-btn" data-tab="t-dominio" onclick="goTo('t-dominio')">💎 Dominio</button>
+  <button class="tab-btn" data-tab="t-app"     onclick="goTo('t-app')">⚙️ Aplicación</button>
+  <button class="tab-btn" data-tab="t-infra"   onclick="goTo('t-infra')">🔌 Infraestructura</button>
+  <button class="tab-btn" data-tab="t-comp"    onclick="goTo('t-comp')">🧩 Composición</button>
+  <button class="tab-btn" data-tab="t-ts"      onclick="goTo('t-ts')">📘 TypeScript del proyecto</button>
+  <button class="tab-btn" data-tab="t-glosario" onclick="goTo('t-glosario')">📖 Glosario</button>
+</nav>
+
+<main>
+
+<!-- ══════════════════════════ VISIÓN GENERAL ══════════════════════════ -->
+<section id="t-vision" class="tab-content active">
+  <h2>🏠 ¿Qué es esta aplicación?</h2>
+  <p class="lead">Es una <strong>API de pedidos</strong>: un pequeño servidor web al que le puedes pedir dos cosas por HTTP — «crea un pedido» y «añade un producto a un pedido». No tiene interfaz gráfica; se usa con herramientas como <code>curl</code> o Postman.</p>
+
+  <div class="card">
+    <h3 style="margin-top:0">Lo que sabe hacer</h3>
+    <table>
+      <tr><th>Petición HTTP</th><th>Qué hace</th><th>Respuestas posibles</th></tr>
+      <tr>
+        <td><code>POST /orders</code><br><small>body: <code>{ "orderSku": "ORDER-001" }</code></small></td>
+        <td>Crea un pedido vacío identificado por su SKU</td>
+        <td>201 creado · 400 datos inválidos · 409 ya existía · 503 fallo de infraestructura</td>
+      </tr>
+      <tr>
+        <td><code>POST /orders/:orderSku/items</code><br><small>body: <code>{ "productSku": "LAPTOP-001", "quantity": 2 }</code></small></td>
+        <td>Busca el precio del producto y lo añade al pedido</td>
+        <td>200 añadido · 400 inválido · 404 pedido o precio no existe · 503 fallo</td>
+      </tr>
+      <tr>
+        <td><code>GET /health</code></td>
+        <td>Responde «estoy vivo» (para comprobar que el servidor funciona)</td>
+        <td>200 siempre</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="idea">
+    💡 <strong>La app es sencilla a propósito.</strong> Lo importante no es <em>qué</em> hace, sino <em>cómo está organizada por dentro</em>. Es un proyecto de aprendizaje: la misma estructura serviría para una app de banca, de reservas o de logística.
+  </div>
+
+  <h3>Tecnologías que usa</h3>
+  <table>
+    <tr><th>Herramienta</th><th>Para qué</th></tr>
+    <tr><td><strong>TypeScript</strong></td><td>JavaScript con tipos: el compilador te avisa si usas algo mal antes de ejecutar.</td></tr>
+    <tr><td><strong>Fastify</strong></td><td>Framework de servidor HTTP (similar a Express, pero más rápido). Recibe las peticiones web.</td></tr>
+    <tr><td><strong>PostgreSQL</strong> (opcional)</td><td>Base de datos real. La app también puede funcionar solo «en memoria» sin BD.</td></tr>
+    <tr><td><strong>Zod</strong></td><td>Valida la configuración (variables de entorno) al arrancar.</td></tr>
+    <tr><td><strong>Pino</strong></td><td>Logger: escribe mensajes estructurados de lo que va pasando.</td></tr>
+    <tr><td><strong>Vitest</strong></td><td>Framework de tests.</td></tr>
+  </table>
+
+  <h3>El mapa de carpetas (con el color de su capa)</h3>
+  <p>Fíjate en los colores: se corresponden con las capas que verás en la pestaña <a class="xref" onclick="goTo('t-capas')">🧅 Las capas</a>. Esta leyenda de colores se mantiene en <em>todos</em> los diagramas de estos apuntes.</p>
+
+  <div class="filetree">clean-orders-ts/
+├── main.ts                        <span class="cm">← punto de entrada: arranca todo</span>
+├── src/
+│   ├── <span class="d">domain/                    🟡 DOMINIO — las reglas del negocio</span>
+│   │   ├── <span class="d">entities/order.ts          (la entidad Pedido)</span>
+│   │   ├── <span class="d">value-objects/             (SKU, Money, Quantity, Currency, OrderItem)</span>
+│   │   └── <span class="d">events/                    (OrderCreated, ItemAddedToOrder)</span>
+│   ├── <span class="a">application/               🔴 APLICACIÓN — los casos de uso</span>
+│   │   ├── <span class="a">use-cases/                 (CreateOrder, AddItemToOrder, CreateOrderWithUoW)</span>
+│   │   ├── <span class="a">ports/                     (interfaces: OrderRepository, EventBus, ...)</span>
+│   │   ├── <span class="a">dto/                       (los "formularios" de entrada)</span>
+│   │   └── <span class="a">errors.ts                  (ValidationError, NotFoundError, ...)</span>
+│   ├── <span class="i">infrastructure/            🔵 INFRAESTRUCTURA — el mundo real</span>
+│   │   ├── <span class="i">http/                      (servidor Fastify + controller + pricing)</span>
+│   │   ├── <span class="i">persistence/               (repositorio en memoria y en Postgres)</span>
+│   │   ├── <span class="i">messaging/                 (event bus: noop y outbox + dispatcher)</span>
+│   │   ├── <span class="i">logging/pino-logger.ts</span>
+│   │   └── <span class="i">database/database-factory.ts</span>
+│   ├── <span class="co">composition/               🟢 COMPOSICIÓN — el "montador" que lo cablea todo</span>
+│   │   ├── <span class="co">config.ts                  (lee y valida el .env)</span>
+│   │   ├── <span class="co">container.ts               (montaje en memoria)</span>
+│   │   ├── <span class="co">postgres-container.ts      (montaje con Postgres)</span>
+│   │   └── <span class="co">unified-container.ts       (elige uno u otro)</span>
+│   └── shared/result.ts           <span class="cm">← el tipo Result (éxito/fallo) usado por todos</span>
+├── db/migrations/001_init.sql     <span class="cm">← crea las tablas de Postgres</span>
+└── tests/                         <span class="cm">← tests de dominio, integración, aceptación...</span></div>
+
+  <h3>Cómo se arranca</h3>
+  <div class="card">
+    <p style="margin-top:0"><strong>Modo simple (sin base de datos):</strong> con <code>DATABASE_TYPE=memory</code> en el archivo <code>.env</code>, todo vive en la memoria del proceso. Al parar el servidor, los datos desaparecen. Perfecto para aprender.</p>
+    <pre><code>npm run dev          <span class="c"># arranca el servidor en http://localhost:3000</span></code></pre>
+    <p><strong>Modo completo (con Postgres):</strong> con <code>DATABASE_TYPE=postgres</code>, los pedidos se guardan en una base de datos real (que se levanta con Docker) y los eventos van a una tabla «outbox».</p>
+    <pre><code>npm run db:up        <span class="c"># levanta Postgres con Docker</span>
+npm run db:migrate   <span class="c"># crea las tablas (orders, order_items, outbox)</span>
+npm run dev          <span class="c"># arranca el servidor</span>
+npm run worker:outbox <span class="c"># (opcional) proceso aparte que publica los eventos pendientes</span></code></pre>
+    <p style="margin-bottom:0">Y para probarla:</p>
+    <pre><code>curl -X POST http://localhost:3000/orders \
+     -H "Content-Type: application/json" \
+     -d '{"orderSku": "ORDER-001"}'
+
+curl -X POST http://localhost:3000/orders/ORDER-001/items \
+     -H "Content-Type: application/json" \
+     -d '{"productSku": "LAPTOP-001", "quantity": 2}'</code></pre>
+  </div>
+
+  <div class="tip">✅ <strong>Siguiente paso:</strong> ve a <a class="xref" onclick="goTo('t-capas')">🧅 Las capas</a> para entender la idea central de toda la arquitectura, y luego a <a class="xref" onclick="goTo('t-viaje')">🚀 El viaje de una petición</a> para ver el código en acción de principio a fin.</div>
+</section>
+
+<!-- ══════════════════════════ LAS CAPAS ══════════════════════════ -->
+<section id="t-capas" class="tab-content">
+  <h2>🧅 Las capas: la idea central de Clean Architecture</h2>
+  <p class="lead">Clean Architecture organiza el código en <strong>anillos concéntricos</strong>. Cuanto más al centro, más importante y más estable es el código. Y hay una única regla de oro que lo gobierna todo.</p>
+
+  <div class="svgwrap">
+  <svg width="640" height="480" viewBox="0 0 640 480" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, sans-serif">
+    <!-- anillos -->
+    <circle cx="320" cy="240" r="225" fill="#dcebf7" stroke="#3b82c4" stroke-width="2.5"/>
+    <circle cx="320" cy="240" r="160" fill="#fde5e0" stroke="#e8604c" stroke-width="2.5"/>
+    <circle cx="320" cy="240" r="95"  fill="#fdf6d8" stroke="#f5c518" stroke-width="2.5"/>
+    <!-- etiquetas -->
+    <text x="320" y="228" text-anchor="middle" font-size="17" font-weight="700" fill="#8a6d00">🟡 DOMINIO</text>
+    <text x="320" y="250" text-anchor="middle" font-size="12" fill="#8a6d00">Order, Money, SKU...</text>
+    <text x="320" y="268" text-anchor="middle" font-size="12" fill="#8a6d00">Reglas de negocio puras</text>
+    <text x="320" y="118" text-anchor="middle" font-size="15" font-weight="700" fill="#a03322">🔴 APLICACIÓN</text>
+    <text x="320" y="136" text-anchor="middle" font-size="11.5" fill="#a03322">Casos de uso + Puertos (interfaces)</text>
+    <text x="320" y="52"  text-anchor="middle" font-size="15" font-weight="700" fill="#1d5a94">🔵 INFRAESTRUCTURA</text>
+    <text x="320" y="70"  text-anchor="middle" font-size="11.5" fill="#1d5a94">Fastify, Postgres, Pino, Outbox...</text>
+    <!-- flechas de dependencia hacia dentro -->
+    <defs>
+      <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+        <path d="M0,0 L8,3 L0,6 Z" fill="#444"/>
+      </marker>
+    </defs>
+    <line x1="106" y1="345" x2="180" y2="305" stroke="#444" stroke-width="2.5" marker-end="url(#arr)"/>
+    <line x1="188" y1="310" x2="248" y2="280" stroke="#444" stroke-width="2.5" marker-end="url(#arr)"/>
+    <text x="80" y="390" font-size="12.5" fill="#444" font-weight="600">Las dependencias SIEMPRE</text>
+    <text x="80" y="406" font-size="12.5" fill="#444" font-weight="600">apuntan hacia dentro →</text>
+    <!-- caja composición -->
+    <rect x="452" y="392" width="170" height="66" rx="10" fill="#ddf2e5" stroke="#3fa66a" stroke-width="2.5"/>
+    <text x="537" y="418" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1e6f42">🟢 COMPOSICIÓN</text>
+    <text x="537" y="436" text-anchor="middle" font-size="10.5" fill="#1e6f42">Conoce TODAS las capas</text>
+    <text x="537" y="450" text-anchor="middle" font-size="10.5" fill="#1e6f42">y las conecta al arrancar</text>
+  </svg>
+  </div>
+
+  <div class="idea">
+    💡 <strong>La regla de la dependencia:</strong> el código de un anillo solo puede «conocer» (importar) código de anillos <em>más internos</em>, nunca al revés.<br><br>
+    🟡 El <strong>Dominio</strong> no importa NADA de nadie (ni Fastify, ni Postgres, ni siquiera la capa de aplicación).<br>
+    🔴 La <strong>Aplicación</strong> solo importa del Dominio.<br>
+    🔵 La <strong>Infraestructura</strong> importa de Aplicación y Dominio.<br>
+    🟢 La <strong>Composición</strong> es la excepción controlada: conoce todo, porque su trabajo es precisamente conectar las piezas.
+  </div>
+
+  <h3>¿Por qué tanto lío? El beneficio real</h3>
+  <div class="grid2">
+    <div class="card">
+      <h4 style="margin-top:0">🔁 Puedes cambiar lo de fuera sin tocar lo de dentro</h4>
+      <p style="margin-bottom:0">Este proyecto lo demuestra: tiene <strong>dos</strong> formas de guardar pedidos (en memoria y en Postgres) y <strong>dos</strong> buses de eventos (uno que no hace nada y otro con tabla outbox). Cambias entre ellos con una variable de entorno, <em>sin tocar ni una línea</em> del dominio ni de los casos de uso.</p>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0">🧪 Puedes probar el negocio sin arrancar nada</h4>
+      <p style="margin-bottom:0">Como el dominio y los casos de uso no dependen de Fastify ni de Postgres, los tests de <code>tests/domain/</code> corren en milisegundos, sin base de datos ni servidor. Solo clases de TypeScript puras.</p>
+    </div>
+  </div>
+
+  <h3>Cada capa en una frase</h3>
+  <table>
+    <tr><th>Capa</th><th>Pregunta que responde</th><th>Ejemplos en este proyecto</th></tr>
+    <tr>
+      <td><span class="chip domain">🟡 Dominio</span></td>
+      <td>«¿Cuáles son las reglas del negocio?»</td>
+      <td>«Un SKU tiene mínimo 3 caracteres», «no se puede sumar dinero de monedas distintas», «añadir dos veces el mismo producto suma cantidades». → <a class="xref" onclick="goTo('t-dominio')">ver pestaña 💎</a></td>
+    </tr>
+    <tr>
+      <td><span class="chip app">🔴 Aplicación</span></td>
+      <td>«¿Qué puede hacer el usuario, paso a paso?»</td>
+      <td>El caso de uso <code>CreateOrder</code>: validar → comprobar que no existe → crear → guardar → publicar eventos. → <a class="xref" onclick="goTo('t-app')">ver pestaña ⚙️</a></td>
+    </tr>
+    <tr>
+      <td><span class="chip infra">🔵 Infraestructura</span></td>
+      <td>«¿Con qué tecnología concreta se hace?»</td>
+      <td>Fastify recibe el HTTP, Postgres guarda las filas, Pino escribe los logs. → <a class="xref" onclick="goTo('t-infra')">ver pestaña 🔌</a></td>
+    </tr>
+    <tr>
+      <td><span class="chip comp">🟢 Composición</span></td>
+      <td>«¿Quién enchufa cada pieza con cada pieza?»</td>
+      <td><code>unified-container.ts</code> decide: ¿memoria o Postgres? Y construye todo el «árbol» de objetos. → <a class="xref" onclick="goTo('t-comp')">ver pestaña 🧩</a></td>
+    </tr>
+  </table>
+
+  <h3>El truco que lo hace posible: puertos y adaptadores</h3>
+  <p>Te estarás preguntando: si la capa de Aplicación no puede importar la Infraestructura… ¿cómo guarda un pedido en Postgres? La respuesta es la pieza más importante de toda la arquitectura:</p>
+
+  <div class="svgwrap">
+  <svg width="860" height="270" viewBox="0 0 860 270" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, sans-serif">
+    <defs>
+      <marker id="arr2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+        <path d="M0,0 L8,3 L0,6 Z" fill="#555"/>
+      </marker>
+    </defs>
+    <!-- use case -->
+    <rect x="20" y="80" width="240" height="110" rx="10" fill="#fde5e0" stroke="#e8604c" stroke-width="2.5"/>
+    <text x="140" y="112" text-anchor="middle" font-size="14" font-weight="700" fill="#a03322">🔴 CreateOrder (use case)</text>
+    <text x="140" y="136" text-anchor="middle" font-size="11.5" fill="#a03322">«Necesito ALGO que sepa</text>
+    <text x="140" y="152" text-anchor="middle" font-size="11.5" fill="#a03322">guardar pedidos. No me importa</text>
+    <text x="140" y="168" text-anchor="middle" font-size="11.5" fill="#a03322">cómo lo haga por dentro.»</text>
+    <!-- puerto -->
+    <rect x="330" y="90" width="200" height="90" rx="10" fill="#fff" stroke="#e8604c" stroke-width="2.5" stroke-dasharray="7 4"/>
+    <text x="430" y="120" text-anchor="middle" font-size="13.5" font-weight="700" fill="#a03322">PUERTO (interface)</text>
+    <text x="430" y="140" text-anchor="middle" font-size="12" fill="#555" font-family="monospace">OrderRepository</text>
+    <text x="430" y="160" text-anchor="middle" font-size="11" fill="#777">save(order) · findById(sku)</text>
+    <!-- adaptadores -->
+    <rect x="610" y="25" width="230" height="72" rx="10" fill="#dcebf7" stroke="#3b82c4" stroke-width="2.5"/>
+    <text x="725" y="55" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1d5a94">🔵 InMemoryOrderRepository</text>
+    <text x="725" y="76" text-anchor="middle" font-size="11" fill="#1d5a94">guarda en un Map de JavaScript</text>
+    <rect x="610" y="170" width="230" height="72" rx="10" fill="#dcebf7" stroke="#3b82c4" stroke-width="2.5"/>
+    <text x="725" y="200" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1d5a94">🔵 PostgresOrderRepository</text>
+    <text x="725" y="221" text-anchor="middle" font-size="11" fill="#1d5a94">guarda con SQL en Postgres</text>
+    <!-- flechas -->
+    <line x1="260" y1="135" x2="322" y2="135" stroke="#555" stroke-width="2.5" marker-end="url(#arr2)"/>
+    <text x="291" y="123" text-anchor="middle" font-size="10.5" fill="#555">usa</text>
+    <line x1="610" y1="70" x2="522" y2="112" stroke="#3b82c4" stroke-width="2.5" marker-end="url(#arr2)"/>
+    <line x1="610" y1="198" x2="522" y2="158" stroke="#3b82c4" stroke-width="2.5" marker-end="url(#arr2)"/>
+    <text x="576" y="72" text-anchor="end" font-size="10.5" fill="#1d5a94">implements</text>
+    <text x="576" y="200" text-anchor="end" font-size="10.5" fill="#1d5a94">implements</text>
+  </svg>
+  </div>
+
+  <div class="idea">
+    🔌 <strong>Analogía del enchufe:</strong> el <strong>puerto</strong> es el enchufe de la pared (una forma estándar: «dos agujeros redondos»). Los <strong>adaptadores</strong> son los aparatos que se enchufan (lámpara, cargador, tostadora). La pared no sabe ni le importa qué hay enchufado — solo exige que encaje en la forma del enchufe.<br><br>
+    En código: el puerto es una <code>interface</code> de TypeScript (solo describe métodos, sin implementación). El adaptador es una <code>class</code> que hace <code>implements</code> de esa interface. Las flechas del diagrama muestran lo genial del truco: <strong>es la infraestructura la que apunta (depende) hacia la aplicación</strong>, y no al revés. A esto se le llama <em>inversión de dependencias</em>.
+  </div>
+
+  <div class="tip">✅ <strong>Siguiente paso:</strong> ahora que conoces las capas, mira cómo colaboran todas en una petición real: <a class="xref" onclick="goTo('t-viaje')">🚀 El viaje de una petición</a>.</div>
+</section>
+
+<!-- ══════════════════════════ EL VIAJE ══════════════════════════ -->
+<section id="t-viaje" class="tab-content">
+  <h2>🚀 El viaje de una petición, de principio a fin</h2>
+  <p class="lead">Vamos a seguir la petición <code>POST /orders/ORDER-001/items</code> («añade 2 portátiles al pedido ORDER-001») a través de <strong>todas</strong> las capas. Este es EL diagrama para entender cómo se conecta el código.</p>
+
+  <div class="flow">
+    <div class="fstep">
+      <div class="who">1. El cliente (curl, Postman, un frontend…)</div>
+      <div class="what">Envía: <code>POST /orders/ORDER-001/items</code> con body <code>{"productSku":"LAPTOP-001","quantity":2}</code></div>
+    </div>
+    <div class="farrow">▼ <small>HTTP</small></div>
+    <div class="fstep l-infra">
+      <div class="who">2. Fastify (el servidor) <span class="chip infra">🔵 infra</span></div>
+      <div class="what">Recibe la petición, la parsea (JSON → objeto JS) y la entrega a la ruta registrada en <code>server.ts</code>. Fastify no sabe nada de pedidos: solo reparte peticiones.</div>
+    </div>
+    <div class="farrow">▼</div>
+    <div class="fstep l-infra">
+      <div class="who">3. OrderController <span class="chip infra">🔵 infra</span> — <code>order-controller.ts</code></div>
+      <div class="what">El «traductor» entre HTTP y la aplicación. Crea un logger con un <code>requestId</code> único, junta los datos de la URL y el body en un <strong>DTO</strong> (un objeto plano con solo los datos necesarios) y llama al caso de uso. <em>Cero lógica de negocio aquí.</em></div>
+    </div>
+    <div class="farrow">▼ <small>execute(dto)</small></div>
+    <div class="fstep l-app">
+      <div class="who">4. AddItemToOrder (caso de uso) <span class="chip app">🔴 aplicación</span> — <code>add-item-to-order.ts</code></div>
+      <div class="what">El «director de orquesta». Ejecuta la receta paso a paso: validar entradas → cargar el pedido → pedir el precio → modificar el pedido → guardar → publicar eventos. Habla solo con <strong>puertos</strong> (interfaces), nunca con Postgres o Fastify directamente.</div>
+    </div>
+    <div class="farrow">▼ <small>new SKU(...), new Quantity(...)</small></div>
+    <div class="fstep l-domain">
+      <div class="who">5. Value Objects <span class="chip domain">🟡 dominio</span> — <code>sku.ts</code>, <code>quantity.ts</code></div>
+      <div class="what">Al construirlos, validan las reglas: SKU con mínimo 3 caracteres (y lo normaliza a mayúsculas), cantidad entera y &gt; 0. Si algo está mal, <strong>lanzan un error</strong> y el viaje termina aquí con un 400.</div>
+    </div>
+    <div class="farrow">▼ <small>orderRepository.findById(sku) — a través del puerto</small></div>
+    <div class="fstep l-infra">
+      <div class="who">6. El repositorio <span class="chip infra">🔵 infra</span> — in-memory o Postgres, según configuración</div>
+      <div class="what">Busca el pedido y lo devuelve <em>reconstruido como entidad de dominio</em> (no como filas de BD). Si no existe → <code>NotFoundError</code> → el controller responderá 404.</div>
+    </div>
+    <div class="farrow">▼ <small>pricingService.getPrice(productSku)</small></div>
+    <div class="fstep l-infra">
+      <div class="who">7. StaticPricingService <span class="chip infra">🔵 infra</span></div>
+      <div class="what">Devuelve el precio del producto (aquí, de una lista fija: LAPTOP-001 → 999,99 USD). En un sistema real llamaría a una API de catálogo. Devuelve un <code>Money</code> (VO del dominio).</div>
+    </div>
+    <div class="farrow">▼ <small>order.addItem(productSku, quantity, unitPrice)</small></div>
+    <div class="fstep l-domain">
+      <div class="who">8. La entidad Order <span class="chip domain">🟡 dominio</span> — <code>order.ts</code></div>
+      <div class="what">Aplica las reglas de negocio: si el producto ya estaba, suma cantidades; si viene con precio distinto al ya registrado, rechaza. Y anota en su lista interna un evento <code>ItemAddedToOrder</code> («esto acaba de pasar»).</div>
+    </div>
+    <div class="farrow">▼ <small>orderRepository.save(order)</small></div>
+    <div class="fstep l-infra">
+      <div class="who">9. El repositorio guarda <span class="chip infra">🔵 infra</span></div>
+      <div class="what">En memoria: mete una copia en un <code>Map</code>. En Postgres: UPSERT en la tabla <code>orders</code> + reemplaza las filas de <code>order_items</code>.</div>
+    </div>
+    <div class="farrow">▼ <small>eventBus.publish(order.events)</small></div>
+    <div class="fstep l-infra">
+      <div class="who">10. El EventBus <span class="chip infra">🔵 infra</span></div>
+      <div class="what">Publica los eventos que la entidad había acumulado. En memoria: no hace nada (<code>NoopEventBus</code>). En Postgres: los guarda en la tabla <code>outbox</code> para que un worker los envíe después (ver <a class="xref" onclick="goTo('t-infra')">🔌 Infraestructura</a>).</div>
+    </div>
+    <div class="farrow">▼ <small>return ok(undefined)</small></div>
+    <div class="fstep l-infra">
+      <div class="who">11. De vuelta en el OrderController <span class="chip infra">🔵 infra</span></div>
+      <div class="what">Recibe el <code>Result</code>. Si es éxito → responde <code>200 {"message":"Item added successfully"}</code>. Si es fallo → traduce el tipo de error a código HTTP (400/404/409/503) con <code>mapErrorToStatusCode</code>.</div>
+    </div>
+    <div class="farrow">▼ <small>HTTP</small></div>
+    <div class="fstep">
+      <div class="who">12. El cliente recibe la respuesta</div>
+      <div class="what"><code>200 OK — {"message": "Item added successfully"}</code> 🎉</div>
+    </div>
+  </div>
+
+  <div class="idea">
+    💡 <strong>Fíjate en el patrón de colores del viaje:</strong> azul → rojo → amarillo → azul → rojo → azul. La petición <em>entra</em> por infraestructura, <em>baja</em> hacia el dominio (el centro de la cebolla), y <em>vuelve a salir</em> por infraestructura. El dominio nunca llama «hacia fuera»: son las capas externas las que lo invocan.
+  </div>
+
+  <h3>El mismo viaje, en código resumido</h3>
+  <p>Este es el corazón del caso de uso <code>AddItemToOrder</code>. Compáralo con los pasos 4–10 de arriba:</p>
+  <pre><code><span class="k">async</span> <span class="f">execute</span>(dto: AddItemToOrderDto): Promise&lt;Result&lt;<span class="k">void</span>, AppError&gt;&gt; {
+  <span class="k">try</span> {
+    <span class="c">// Paso 5 — Los VOs validan al construirse (si algo está mal, lanzan)</span>
+    <span class="k">const</span> orderSku   = <span class="k">new</span> <span class="f">SKU</span>(dto.orderSku)
+    <span class="k">const</span> productSku = <span class="k">new</span> <span class="f">SKU</span>(dto.productSku)
+    <span class="k">const</span> quantity   = <span class="k">new</span> <span class="f">Quantity</span>(dto.quantity)
+
+    <span class="c">// Paso 6 — Cargar el pedido (a través del PUERTO OrderRepository)</span>
+    <span class="k">const</span> orderResult = <span class="k">await</span> <span class="k">this</span>.orderRepository.<span class="f">findById</span>(orderSku)
+    <span class="k">if</span> (!orderResult.success) <span class="k">return</span> <span class="f">fail</span>(orderResult.error)
+    <span class="k">const</span> order = orderResult.data
+
+    <span class="c">// Paso 7 — Pedir el precio (a través del PUERTO PricingService)</span>
+    <span class="k">const</span> priceResult = <span class="k">await</span> <span class="k">this</span>.pricingService.<span class="f">getPrice</span>(productSku)
+    <span class="k">if</span> (!priceResult.success) <span class="k">return</span> <span class="f">fail</span>(priceResult.error)
+
+    <span class="c">// Paso 8 — Reglas de negocio (DOMINIO)</span>
+    order.<span class="f">addItem</span>(productSku, quantity, priceResult.data)
+
+    <span class="c">// Paso 9 — Guardar</span>
+    <span class="k">const</span> saveResult = <span class="k">await</span> <span class="k">this</span>.orderRepository.<span class="f">save</span>(order)
+    <span class="k">if</span> (!saveResult.success) <span class="k">return</span> <span class="f">fail</span>(saveResult.error)
+
+    <span class="c">// Paso 10 — Publicar eventos</span>
+    <span class="k">const</span> publishResult = <span class="k">await</span> <span class="k">this</span>.eventBus.<span class="f">publish</span>(order.events)
+    <span class="k">if</span> (!publishResult.success) <span class="k">return</span> <span class="f">fail</span>(publishResult.error)
+
+    <span class="k">return</span> <span class="f">ok</span>(<span class="k">undefined</span>)   <span class="c">// ← ¡éxito!</span>
+  } <span class="k">catch</span> (error) {
+    <span class="c">// Los "throw" de los VOs acaban aquí y se convierten en error de validación</span>
+    <span class="k">return</span> <span class="f">fail</span>(<span class="k">new</span> <span class="f">ValidationError</span>((error <span class="k">as</span> Error).message))
+  }
+}</code></pre>
+
+  <div class="warn">⚠️ ¿Te llama la atención tanto <code>if (!result.success) return fail(...)</code>? Es el patrón <strong>Result</strong>: en vez de lanzar excepciones para errores esperables, las funciones devuelven «éxito con dato» o «fallo con error». Se explica en detalle en <a class="xref" onclick="goTo('t-app')">⚙️ Aplicación</a>.</div>
+</section>
+
+<!-- ══════════════════════════ DOMINIO ══════════════════════════ -->
+<section id="t-dominio" class="tab-content">
+  <h2>💎 El Dominio: las reglas del negocio <span class="chip domain">🟡 src/domain/</span></h2>
+  <p class="lead">Es el centro de la cebolla. Aquí viven las reglas que serían ciertas <em>aunque la app no fuera una API web</em>: qué es un pedido, qué es dinero, qué se puede y no se puede hacer. <strong>No importa nada de fuera</strong>: si borras Fastify y Postgres del proyecto, esta carpeta seguiría compilando.</p>
+
+  <h3>Las piezas y cómo se componen</h3>
+  <div class="svgwrap">
+  <svg width="820" height="430" viewBox="0 0 820 430" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, sans-serif">
+    <defs>
+      <marker id="arr3" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+        <path d="M0,0 L8,3 L0,6 Z" fill="#8a6d00"/>
+      </marker>
+    </defs>
+    <!-- Order -->
+    <rect x="280" y="20" width="260" height="120" rx="12" fill="#fdf6d8" stroke="#f5c518" stroke-width="3"/>
+    <text x="410" y="48" text-anchor="middle" font-size="16" font-weight="700" fill="#8a6d00">Order (Entidad / Aggregate Root)</text>
+    <text x="410" y="72" text-anchor="middle" font-size="11.5" fill="#6b5500">— tiene identidad: su SKU</text>
+    <text x="410" y="90" text-anchor="middle" font-size="11.5" fill="#6b5500">— guarda sus items en un Map</text>
+    <text x="410" y="108" text-anchor="middle" font-size="11.5" fill="#6b5500">— acumula eventos de lo que le pasa</text>
+    <text x="410" y="126" text-anchor="middle" font-size="11.5" fill="#6b5500">— métodos: addItem, getTotalByCurrency</text>
+    <!-- OrderItem -->
+    <rect x="90" y="200" width="230" height="90" rx="10" fill="#fffdf2" stroke="#f5c518" stroke-width="2"/>
+    <text x="205" y="228" text-anchor="middle" font-size="14" font-weight="700" fill="#8a6d00">OrderItem (VO)</text>
+    <text x="205" y="248" text-anchor="middle" font-size="11" fill="#6b5500">una línea del pedido:</text>
+    <text x="205" y="264" text-anchor="middle" font-size="11" fill="#6b5500">producto + cantidad + precio</text>
+    <text x="205" y="280" text-anchor="middle" font-size="11" fill="#6b5500">totalPrice = precio × cantidad</text>
+    <!-- events -->
+    <rect x="500" y="200" width="230" height="90" rx="10" fill="#fffdf2" stroke="#f5c518" stroke-width="2" stroke-dasharray="6 4"/>
+    <text x="615" y="228" text-anchor="middle" font-size="14" font-weight="700" fill="#8a6d00">Domain Events</text>
+    <text x="615" y="248" text-anchor="middle" font-size="11" fill="#6b5500">OrderCreated</text>
+    <text x="615" y="264" text-anchor="middle" font-size="11" fill="#6b5500">ItemAddedToOrder</text>
+    <text x="615" y="280" text-anchor="middle" font-size="11" fill="#6b5500">«algo que YA ocurrió», inmutable</text>
+    <!-- VOs básicos -->
+    <rect x="30"  y="340" width="120" height="60" rx="10" fill="#fffdf2" stroke="#f5c518" stroke-width="2"/>
+    <text x="90" y="365" text-anchor="middle" font-size="13" font-weight="700" fill="#8a6d00">SKU</text>
+    <text x="90" y="384" text-anchor="middle" font-size="10" fill="#6b5500">min 3 chars, MAYÚSC.</text>
+    <rect x="170" y="340" width="120" height="60" rx="10" fill="#fffdf2" stroke="#f5c518" stroke-width="2"/>
+    <text x="230" y="365" text-anchor="middle" font-size="13" font-weight="700" fill="#8a6d00">Quantity</text>
+    <text x="230" y="384" text-anchor="middle" font-size="10" fill="#6b5500">entero &gt; 0</text>
+    <rect x="310" y="340" width="120" height="60" rx="10" fill="#fffdf2" stroke="#f5c518" stroke-width="2"/>
+    <text x="370" y="365" text-anchor="middle" font-size="13" font-weight="700" fill="#8a6d00">Money</text>
+    <text x="370" y="384" text-anchor="middle" font-size="10" fill="#6b5500">importe ≥ 0 + moneda</text>
+    <rect x="450" y="340" width="120" height="60" rx="10" fill="#fffdf2" stroke="#f5c518" stroke-width="2"/>
+    <text x="510" y="365" text-anchor="middle" font-size="13" font-weight="700" fill="#8a6d00">Currency</text>
+    <text x="510" y="384" text-anchor="middle" font-size="10" fill="#6b5500">USD, EUR, GBP...</text>
+    <!-- flechas -->
+    <line x1="330" y1="140" x2="240" y2="195" stroke="#8a6d00" stroke-width="2" marker-end="url(#arr3)"/>
+    <text x="255" y="165" font-size="10.5" fill="#8a6d00">contiene 0..N</text>
+    <line x1="490" y1="140" x2="580" y2="195" stroke="#8a6d00" stroke-width="2" marker-end="url(#arr3)"/>
+    <text x="560" y="165" text-anchor="end" font-size="10.5" fill="#8a6d00">emite</text>
+    <line x1="150" y1="300" x2="105" y2="335" stroke="#8a6d00" stroke-width="1.8" marker-end="url(#arr3)"/>
+    <line x1="205" y1="300" x2="222" y2="335" stroke="#8a6d00" stroke-width="1.8" marker-end="url(#arr3)"/>
+    <line x1="270" y1="300" x2="350" y2="335" stroke="#8a6d00" stroke-width="1.8" marker-end="url(#arr3)"/>
+    <text x="150" y="322" font-size="10.5" fill="#8a6d00">se compone de</text>
+    <line x1="370" y1="400" x2="370" y2="418" stroke="none"/>
+    <line x1="430" y1="372" x2="445" y2="372" stroke="#8a6d00" stroke-width="1.8" marker-end="url(#arr3)"/>
+    <text x="437" y="362" text-anchor="middle" font-size="10" fill="#8a6d00">usa</text>
+  </svg>
+  </div>
+
+  <h3>¿Qué es un Value Object (VO)? La idea más útil de esta capa</h3>
+  <div class="idea">
+    💡 Un <strong>Value Object</strong> es un valor «con reglas incorporadas». En vez de pasear un <code>string</code> pelado por todo el código y validarlo en mil sitios, creas una clase pequeñita que:
+    <ol style="margin: 8px 0 0;">
+      <li><strong>Valida en el constructor</strong> — es <em>imposible</em> que exista un <code>SKU</code> inválido, porque el <code>new SKU("ab")</code> lanza un error antes de nacer.</li>
+      <li><strong>Es inmutable</strong> — una vez creado no cambia. Si necesitas otro valor, creas otro objeto (mira <code>Quantity.add</code>: devuelve una <em>nueva</em> Quantity).</li>
+      <li><strong>Se compara por valor</strong> — dos <code>SKU</code> con el mismo texto son «iguales» (método <code>equals</code>), aunque sean dos objetos distintos en memoria.</li>
+    </ol>
+  </div>
+
+  <pre><code><span class="c">// domain/value-objects/sku.ts — el VO más simple del proyecto</span>
+<span class="k">export class</span> <span class="f">SKU</span> {
+  <span class="k">private readonly</span> _value: <span class="k">string</span>   <span class="c">// "private readonly" = nadie lo toca desde fuera, nunca cambia</span>
+
+  <span class="f">constructor</span>(value: <span class="k">string</span>) {
+    <span class="k">if</span> (!value || value.trim().length === 0) <span class="k">throw new</span> <span class="f">Error</span>(<span class="s">'SKU cannot be empty'</span>)
+    <span class="k">if</span> (value.trim().length &lt; 3)             <span class="k">throw new</span> <span class="f">Error</span>(<span class="s">'SKU must be at least 3 characters long'</span>)
+    <span class="k">this</span>._value = value.trim().toUpperCase()  <span class="c">// normaliza: " abc " → "ABC"</span>
+  }
+
+  <span class="k">get</span> <span class="f">value</span>(): <span class="k">string</span> { <span class="k">return this</span>._value }              <span class="c">// getter de solo lectura</span>
+  <span class="f">equals</span>(other: SKU): <span class="k">boolean</span> { <span class="k">return this</span>._value === other._value }  <span class="c">// igualdad por VALOR</span>
+}</code></pre>
+
+  <h3>Money: el VO con las reglas más interesantes</h3>
+  <ul>
+    <li>❌ Importe negativo → error. ❌ <code>NaN</code> o infinito → error.</li>
+    <li>🔢 Redondea a 2 decimales, porque en JavaScript <code>0.1 + 0.2 = 0.30000000000000004</code> (¡en serio, pruébalo en la consola!).</li>
+    <li>💱 <code>add()</code> solo suma si ambas cantidades son de la <strong>misma moneda</strong>. Sumar 5 USD + 3 EUR no tiene sentido sin tipo de cambio, así que el objeto directamente lo prohíbe.</li>
+  </ul>
+
+  <h3>La entidad Order: identidad + comportamiento + eventos</h3>
+  <p>A diferencia de los VOs, una <strong>entidad</strong> tiene <em>identidad propia</em> (su SKU la identifica: dos pedidos con distintos items pueden ser «el mismo pedido» en dos momentos del tiempo). <code>Order</code> es además el <strong>Aggregate Root</strong>: la única puerta de entrada para tocar sus items. Nadie modifica un <code>OrderItem</code> directamente; siempre se pasa por <code>order.addItem(...)</code>, que aplica las reglas:</p>
+  <pre><code><span class="f">addItem</span>(productSku: SKU, quantity: Quantity, unitPrice: Money): <span class="k">void</span> {
+  <span class="k">const</span> existingItem = <span class="k">this</span>._items.get(productSku.value)
+
+  <span class="k">if</span> (existingItem) {
+    <span class="c">// Regla 1: el mismo producto no puede tener dos precios distintos</span>
+    <span class="k">if</span> (!existingItem.unitPrice.equals(unitPrice)) {
+      <span class="k">throw new</span> <span class="f">Error</span>(<span class="s">'Cannot add item with different unit price'</span>)
+    }
+    <span class="c">// Regla 2: añadir el mismo producto otra vez = sumar cantidades</span>
+    <span class="k">this</span>._items.set(productSku.value, existingItem.<span class="f">increaseQuantity</span>(quantity))
+  } <span class="k">else</span> {
+    <span class="k">this</span>._items.set(productSku.value, <span class="k">new</span> <span class="f">OrderItem</span>(productSku, quantity, unitPrice))
+  }
+
+  <span class="c">// Y SIEMPRE deja constancia del cambio como evento</span>
+  <span class="k">this</span>._events.push(<span class="k">new</span> <span class="f">ItemAddedToOrder</span>(...))
+}</code></pre>
+
+  <h3>Los eventos de dominio: el «diario» de lo que pasa</h3>
+  <p>Cada vez que la entidad cambia, apunta un evento en su lista privada <code>_events</code>: «se creó el pedido», «se añadió un item». Son objetos inmutables con el id del agregado y la fecha. La entidad <strong>no los envía a ningún sitio</strong> — solo los acumula. Es el caso de uso quien, después de guardar con éxito, los recoge (<code>order.events</code>) y los entrega al EventBus. Este desacople permite que «avisar al mundo» (email, integración, log…) no contamine las reglas de negocio.</p>
+
+  <div class="tip">✅ <strong>Siguiente paso:</strong> el dominio define las reglas, pero alguien tiene que dirigir la función. Eso es la capa de <a class="xref" onclick="goTo('t-app')">⚙️ Aplicación</a>.</div>
+</section>
+
+<!-- ══════════════════════════ APLICACIÓN ══════════════════════════ -->
+<section id="t-app" class="tab-content">
+  <h2>⚙️ La Aplicación: casos de uso y puertos <span class="chip app">🔴 src/application/</span></h2>
+  <p class="lead">Esta capa responde a: «¿qué acciones ofrece el sistema y en qué orden se ejecutan los pasos?». Contiene los <strong>casos de uso</strong> (las recetas), los <strong>puertos</strong> (los enchufes hacia el exterior), los <strong>DTOs</strong> (los formularios de entrada) y los <strong>errores tipados</strong>.</p>
+
+  <h3>1. Casos de uso: una clase = una acción del usuario</h3>
+  <table>
+    <tr><th>Clase</th><th>Acción</th><th>Receta</th></tr>
+    <tr>
+      <td><code>CreateOrder</code></td>
+      <td>Crear un pedido</td>
+      <td>validar SKU → ¿ya existe? (si sí → 409) → <code>new Order()</code> → guardar → publicar eventos</td>
+    </tr>
+    <tr>
+      <td><code>AddItemToOrder</code></td>
+      <td>Añadir producto</td>
+      <td>validar → cargar pedido → pedir precio → <code>order.addItem()</code> → guardar → publicar eventos</td>
+    </tr>
+    <tr>
+      <td><code>CreateOrderWithUoW</code></td>
+      <td>Crear pedido (versión transaccional)</td>
+      <td>igual que CreateOrder pero el guardado va dentro de una <strong>transacción</strong> de BD (Unit of Work); los eventos se publican después del COMMIT</td>
+    </tr>
+  </table>
+  <p>Observa el patrón común: el caso de uso <strong>no sabe hacer nada por sí mismo</strong> — no sabe guardar, ni buscar precios, ni publicar. Solo sabe <em>en qué orden pedirlo</em> y qué hacer si algo falla. Todo lo que necesita se lo dan por el constructor:</p>
+  <pre><code><span class="k">export class</span> <span class="f">AddItemToOrder</span> {
+  <span class="f">constructor</span>(
+    <span class="k">private readonly</span> orderRepository: OrderRepository,  <span class="c">// ← interface, NO clase concreta</span>
+    <span class="k">private readonly</span> pricingService: PricingService,    <span class="c">// ← interface</span>
+    <span class="k">private readonly</span> eventBus: EventBus                 <span class="c">// ← interface</span>
+  ) {}
+  ...
+}</code></pre>
+  <div class="idea">💡 A esto se le llama <strong>inyección de dependencias</strong> (Dependency Injection, DI): en vez de que la clase cree sus herramientas (<code>new PostgresOrderRepository()</code> ← ¡prohibido aquí!), las <em>recibe ya hechas</em>. ¿Quién se las da? El <a class="xref" onclick="goTo('t-comp')">🧩 contenedor de composición</a>. Gracias a esto, en los tests se le pueden pasar implementaciones falsas y probar el caso de uso sin base de datos.</div>
+
+  <h3>2. Puertos: los cinco «enchufes» de esta app</h3>
+  <p>Cada puerto es una <code>interface</code> de TypeScript en <code>src/application/ports/</code>. Definen <em>qué se necesita</em>, sin decir <em>cómo se hace</em>:</p>
+  <table>
+    <tr><th>Puerto (interface)</th><th>Contrato («necesito algo que sepa…»)</th><th>Adaptadores que lo implementan 🔵</th></tr>
+    <tr><td><code>OrderRepository</code></td><td>…guardar y buscar pedidos</td><td><code>InMemoryOrderRepository</code>, <code>PostgresOrderRepository</code></td></tr>
+    <tr><td><code>PricingService</code></td><td>…darme el precio de un producto</td><td><code>StaticPricingService</code> (lista fija)</td></tr>
+    <tr><td><code>EventBus</code></td><td>…publicar eventos de dominio</td><td><code>NoopEventBus</code> (nada), <code>OutboxEventBus</code> (tabla outbox)</td></tr>
+    <tr><td><code>UnitOfWork</code></td><td>…ejecutar varias operaciones de BD como una transacción atómica</td><td><code>PgUnitOfWork</code></td></tr>
+    <tr><td><code>Logger</code></td><td>…escribir logs estructurados</td><td><code>PinoLogger</code></td></tr>
+  </table>
+  <pre><code><span class="c">// application/ports/order-repository.ts — un puerto completo. Fíjate: NO hay implementación.</span>
+<span class="k">export interface</span> <span class="f">OrderRepository</span> {
+  <span class="f">save</span>(order: Order): Promise&lt;Result&lt;<span class="k">void</span>, AppError&gt;&gt;
+  <span class="f">findById</span>(sku: SKU): Promise&lt;Result&lt;Order, AppError&gt;&gt;
+}</code></pre>
+
+  <h3>3. DTOs: los formularios de entrada</h3>
+  <p>Un DTO (<em>Data Transfer Object</em>) es un objeto plano, sin métodos ni lógica, que transporta los datos de entrada desde el controller hasta el caso de uso. Es como el formulario en papel que rellenas en una ventanilla: solo campos.</p>
+  <pre><code><span class="k">export interface</span> <span class="f">AddItemToOrderDto</span> {
+  orderSku: <span class="k">string</span>
+  productSku: <span class="k">string</span>
+  quantity: <span class="k">number</span>
+}</code></pre>
+  <p>El DTO lleva tipos «tontos» (<code>string</code>, <code>number</code>). Es el caso de uso quien los convierte en VOs «listos» (<code>SKU</code>, <code>Quantity</code>) — y ahí es donde saltan las validaciones.</p>
+
+  <h3>4. El patrón Result: errores sin excepciones</h3>
+  <p>En este proyecto casi nada «lanza» excepciones hacia arriba. En su lugar, las funciones devuelven un <code>Result</code>: una caja que contiene <strong>o bien</strong> el dato del éxito, <strong>o bien</strong> el error. Quien recibe la caja está <em>obligado por el compilador</em> a mirar qué hay dentro antes de usarla:</p>
+  <pre><code><span class="c">// shared/result.ts (simplificado)</span>
+<span class="k">export type</span> <span class="f">Result</span>&lt;T, E&gt; =
+  | { success: <span class="k">true</span>;  data: T }     <span class="c">// caja de éxito</span>
+  | { success: <span class="k">false</span>; error: E }    <span class="c">// caja de fallo</span>
+
+<span class="c">// Y en el código que lo usa:</span>
+<span class="k">const</span> result = <span class="k">await</span> createOrderUseCase.execute(dto)
+<span class="k">if</span> (!result.success) {
+  <span class="c">// Dentro de este if, TypeScript SABE que existe result.error (y NO result.data)</span>
+  reply.code(400).send(result.error)
+  <span class="k">return</span>
+}
+<span class="c">// Y aquí TypeScript SABE que existe result.data ✨</span></code></pre>
+  <div class="idea">💡 <strong>¿Por qué es mejor que try/catch?</strong> Con excepciones, olvidarte de un <code>catch</code> compila igual y explota en producción. Con <code>Result</code>, el error <em>forma parte del tipo de retorno</em>: si intentas usar <code>result.data</code> sin comprobar <code>success</code>, TypeScript te marca error en el editor. El fallo se vuelve imposible de ignorar. (La magia de tipos detrás de esto se llama «unión discriminada» — explicada en <a class="xref" onclick="goTo('t-ts')">📘 TypeScript</a>.)</div>
+
+  <h3>5. Errores tipados y su traducción a HTTP</h3>
+  <p>Los casos de uso devuelven errores de una pequeña jerarquía (<code>application/errors.ts</code>). Cada error lleva un campo <code>type</code>, y <strong>un único sitio</strong> del proyecto (el controller) los traduce a códigos HTTP:</p>
+  <table>
+    <tr><th>Error</th><th>Significa</th><th>HTTP</th></tr>
+    <tr><td><code>ValidationError</code></td><td>Los datos de entrada no cumplen las reglas (SKU corto, cantidad negativa…)</td><td>400 Bad Request</td></tr>
+    <tr><td><code>NotFoundError</code></td><td>El pedido o el precio buscado no existe</td><td>404 Not Found</td></tr>
+    <tr><td><code>ConflictError</code></td><td>Intentas crear un pedido que ya existe</td><td>409 Conflict</td></tr>
+    <tr><td><code>InfraError</code></td><td>Algo técnico falló (BD caída, timeout…)</td><td>503 Service Unavailable</td></tr>
+  </table>
+  <p>Fíjate en el detalle de diseño: los casos de uso hablan de «conflicto» o «no encontrado» (conceptos de negocio), <em>nunca</em> de «409» o «404» (conceptos de HTTP). Si mañana esta app se usara desde una cola de mensajes en vez de HTTP, los casos de uso no cambiarían ni una línea.</p>
+
+  <div class="tip">✅ <strong>Siguiente paso:</strong> ya sabes qué necesitan los casos de uso (los puertos). Ahora mira quién los implementa de verdad: <a class="xref" onclick="goTo('t-infra')">🔌 Infraestructura</a>.</div>
+</section>
+
+<!-- ══════════════════════════ INFRAESTRUCTURA ══════════════════════════ -->
+<section id="t-infra" class="tab-content">
+  <h2>🔌 La Infraestructura: los adaptadores <span class="chip infra">🔵 src/infrastructure/</span></h2>
+  <p class="lead">Aquí vive todo lo que toca «el mundo real»: HTTP, base de datos, logs, mensajería. Cada pieza es un <strong>adaptador</strong> que implementa uno de los puertos de la capa de aplicación. Es la capa más grande… y la más reemplazable.</p>
+
+  <h3>Mapa de adaptadores</h3>
+  <table>
+    <tr><th>Adaptador</th><th>Implementa el puerto</th><th>Qué hace</th></tr>
+    <tr><td><code>OrderController</code> + <code>server.ts</code></td><td>— (es el adaptador de <em>entrada</em>)</td><td>Traduce HTTP → DTO → caso de uso → HTTP. Registra las rutas en Fastify.</td></tr>
+    <tr><td><code>InMemoryOrderRepository</code></td><td><code>OrderRepository</code></td><td>Un <code>Map&lt;string, Order&gt;</code>. Guarda <em>copias</em> de los pedidos para que nadie mute el «almacén» desde fuera.</td></tr>
+    <tr><td><code>PostgresOrderRepository</code></td><td><code>OrderRepository</code></td><td>Traduce <code>Order</code> ↔ filas SQL de las tablas <code>orders</code> y <code>order_items</code>.</td></tr>
+    <tr><td><code>StaticPricingService</code></td><td><code>PricingService</code></td><td>Catálogo fijo en memoria (LAPTOP-001 → 999,99 USD…). En un sistema real: llamada a la API de catálogo.</td></tr>
+    <tr><td><code>NoopEventBus</code></td><td><code>EventBus</code></td><td>Recibe eventos y… no hace nada («no-op»). Útil en desarrollo.</td></tr>
+    <tr><td><code>OutboxEventBus</code></td><td><code>EventBus</code></td><td>Guarda los eventos en la tabla <code>outbox</code> de Postgres (patrón Outbox, ver abajo).</td></tr>
+    <tr><td><code>PgUnitOfWork</code></td><td><code>UnitOfWork</code></td><td>Envuelve operaciones en una transacción BEGIN/COMMIT/ROLLBACK.</td></tr>
+    <tr><td><code>PinoLogger</code></td><td><code>Logger</code></td><td>Logs estructurados en JSON con la librería Pino.</td></tr>
+  </table>
+
+  <h3>El repositorio Postgres: traducir entre dos mundos</h3>
+  <p>El dominio piensa en objetos (<code>Order</code> con sus <code>OrderItem</code>); la base de datos piensa en filas y tablas. El repositorio es el traductor bidireccional:</p>
+  <div class="svgwrap">
+  <svg width="840" height="230" viewBox="0 0 840 230" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, sans-serif">
+    <defs>
+      <marker id="arr4" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#555"/></marker>
+    </defs>
+    <rect x="20" y="55" width="220" height="120" rx="10" fill="#fdf6d8" stroke="#f5c518" stroke-width="2.5"/>
+    <text x="130" y="85" text-anchor="middle" font-size="14" font-weight="700" fill="#8a6d00">🟡 Order (objeto)</text>
+    <text x="130" y="110" text-anchor="middle" font-size="11" fill="#6b5500">order.sku = "ORDER-001"</text>
+    <text x="130" y="128" text-anchor="middle" font-size="11" fill="#6b5500">items: [LAPTOP-001 ×2,</text>
+    <text x="130" y="146" text-anchor="middle" font-size="11" fill="#6b5500">MOUSE-001 ×1]</text>
+    <rect x="320" y="55" width="200" height="120" rx="10" fill="#dcebf7" stroke="#3b82c4" stroke-width="2.5"/>
+    <text x="420" y="90" text-anchor="middle" font-size="13" font-weight="700" fill="#1d5a94">🔵 PostgresOrder-</text>
+    <text x="420" y="108" text-anchor="middle" font-size="13" font-weight="700" fill="#1d5a94">Repository</text>
+    <text x="420" y="132" text-anchor="middle" font-size="10.5" fill="#1d5a94">save():  objeto → filas (UPSERT)</text>
+    <text x="420" y="150" text-anchor="middle" font-size="10.5" fill="#1d5a94">findById(): filas → objeto</text>
+    <rect x="600" y="20" width="220" height="86" rx="10" fill="#eef2f7" stroke="#94a3b8" stroke-width="2"/>
+    <text x="710" y="45" text-anchor="middle" font-size="12.5" font-weight="700" fill="#334155">tabla orders</text>
+    <text x="710" y="66" text-anchor="middle" font-size="10.5" font-family="monospace" fill="#334155">id | customer_id | status |</text>
+    <text x="710" y="82" text-anchor="middle" font-size="10.5" font-family="monospace" fill="#334155">total_amount | currency</text>
+    <rect x="600" y="126" width="220" height="86" rx="10" fill="#eef2f7" stroke="#94a3b8" stroke-width="2"/>
+    <text x="710" y="151" text-anchor="middle" font-size="12.5" font-weight="700" fill="#334155">tabla order_items</text>
+    <text x="710" y="172" text-anchor="middle" font-size="10.5" font-family="monospace" fill="#334155">id | order_id | sku | quantity</text>
+    <text x="710" y="188" text-anchor="middle" font-size="10.5" font-family="monospace" fill="#334155">| unit_price | total_price</text>
+    <line x1="240" y1="115" x2="312" y2="115" stroke="#555" stroke-width="2.5" marker-end="url(#arr4)"/>
+    <line x1="312" y1="130" x2="240" y2="130" stroke="#555" stroke-width="2.5" marker-end="url(#arr4)"/>
+    <line x1="520" y1="100" x2="592" y2="70" stroke="#555" stroke-width="2" marker-end="url(#arr4)"/>
+    <line x1="520" y1="140" x2="592" y2="165" stroke="#555" stroke-width="2" marker-end="url(#arr4)"/>
+    <text x="556" y="60" text-anchor="middle" font-size="10.5" fill="#555">SQL</text>
+  </svg>
+  </div>
+  <p>Dos detalles curiosos de este repositorio:</p>
+  <ul>
+    <li><strong>SKU → UUID determinista:</strong> las tablas usan UUID como clave, pero nosotros manejamos SKUs legibles («ORDER-001»). El repo hace un hash SHA-256 del SKU y lo formatea como UUID: el mismo SKU siempre produce el mismo UUID, sin tablas de mapeo.</li>
+    <li><strong>Estrategia «reemplazar»:</strong> al guardar, borra todos los items del pedido y los reinserta. Simple y correcta, aunque para pedidos enormes sería ineficiente (se menciona en los comentarios del código como mejora posible).</li>
+  </ul>
+
+  <h3>Unit of Work: todo o nada 🎯</h3>
+  <p>Imagina que guardar un pedido requiere dos escrituras: la fila del pedido y las filas de sus items. ¿Qué pasa si la primera funciona y la segunda falla? Tendrías datos corruptos a medias. La solución es la <strong>transacción</strong>: un «paquete» de operaciones que la base de datos aplica completo o descarta completo.</p>
+  <div class="flow">
+    <div class="fstep l-infra"><div class="who">1. <code>pool.connect()</code></div><div class="what">Pide una conexión al pool. TODA la transacción usará esta misma conexión (clave para que funcione).</div></div>
+    <div class="farrow">▼</div>
+    <div class="fstep l-infra"><div class="who">2. <code>BEGIN</code></div><div class="what">Abre la transacción: a partir de aquí, nada es definitivo.</div></div>
+    <div class="farrow">▼</div>
+    <div class="fstep l-app"><div class="who">3. Ejecuta la función del caso de uso</div><div class="what">El UoW le pasa repositorios construidos con <em>esa misma conexión</em>. El caso de uso guarda lo que necesite.</div></div>
+    <div class="farrow">▼ <small>¿fue todo bien?</small></div>
+    <div class="fstep l-infra"><div class="who">4a. Sí → <code>COMMIT</code> ✅ &nbsp;&nbsp;|&nbsp;&nbsp; 4b. Algo lanzó → <code>ROLLBACK</code> ↩️</div><div class="what">COMMIT hace definitivos todos los cambios a la vez. ROLLBACK los deshace todos, como si nada hubiera pasado.</div></div>
+    <div class="farrow">▼</div>
+    <div class="fstep l-infra"><div class="who">5. <code>finally: client.release()</code></div><div class="what">Pase lo que pase, la conexión vuelve al pool (si no, el pool se quedaría sin conexiones).</div></div>
+  </div>
+  <p>El caso de uso lo consume así de limpio — él no ve ni BEGIN ni COMMIT:</p>
+  <pre><code><span class="k">const</span> result = <span class="k">await</span> <span class="k">this</span>.unitOfWork.<span class="f">run</span>(<span class="k">async</span> (repos) =&gt; {
+  <span class="k">const</span> order = <span class="k">new</span> <span class="f">Order</span>(orderSku)
+  <span class="k">const</span> saveResult = <span class="k">await</span> repos.orderRepository.<span class="f">save</span>(order)
+  <span class="k">if</span> (!saveResult.success) <span class="k">throw</span> saveResult.error   <span class="c">// lanzar dentro del run ⇒ ROLLBACK automático</span>
+  <span class="k">return</span> order
+})</code></pre>
+
+  <h3>El patrón Outbox: eventos que no se pierden 📮</h3>
+  <p>Problema clásico de sistemas distribuidos: guardas el pedido en la BD ✅ y luego publicas el evento a un broker (Kafka, RabbitMQ)… pero el broker está caído ❌. O al revés: publicas ✅ y el guardado falla ❌ — has anunciado algo que no existe. No hay forma de hacer las dos cosas «a la vez» en sistemas distintos.</p>
+  <p><strong>Solución:</strong> no publiques directamente. Guarda el evento <em>en tu propia base de datos</em> (tabla <code>outbox</code> = «bandeja de salida»), y deja que un proceso aparte lo envíe cuando pueda:</p>
+
+  <div class="svgwrap">
+  <svg width="860" height="330" viewBox="0 0 860 330" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, sans-serif">
+    <defs>
+      <marker id="arr5" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#555"/></marker>
+    </defs>
+    <!-- proceso 1 -->
+    <rect x="15" y="15" width="390" height="190" rx="12" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="8 5"/>
+    <text x="30" y="40" font-size="12" font-weight="700" fill="#64748b">PROCESO 1: el servidor API (npm run dev)</text>
+    <rect x="40" y="60" width="160" height="60" rx="10" fill="#fde5e0" stroke="#e8604c" stroke-width="2.5"/>
+    <text x="120" y="85" text-anchor="middle" font-size="12" font-weight="700" fill="#a03322">🔴 Caso de uso</text>
+    <text x="120" y="103" text-anchor="middle" font-size="10.5" fill="#a03322">eventBus.publish(events)</text>
+    <rect x="230" y="60" width="150" height="60" rx="10" fill="#dcebf7" stroke="#3b82c4" stroke-width="2.5"/>
+    <text x="305" y="85" text-anchor="middle" font-size="12" font-weight="700" fill="#1d5a94">🔵 OutboxEventBus</text>
+    <text x="305" y="103" text-anchor="middle" font-size="10.5" fill="#1d5a94">INSERT INTO outbox</text>
+    <line x1="200" y1="90" x2="222" y2="90" stroke="#555" stroke-width="2.5" marker-end="url(#arr5)"/>
+    <!-- tabla outbox -->
+    <rect x="330" y="235" width="220" height="80" rx="10" fill="#eef2f7" stroke="#94a3b8" stroke-width="2.5"/>
+    <text x="440" y="262" text-anchor="middle" font-size="13" font-weight="700" fill="#334155">🗃️ tabla outbox (Postgres)</text>
+    <text x="440" y="283" text-anchor="middle" font-size="10.5" font-family="monospace" fill="#334155">event_type | event_data |</text>
+    <text x="440" y="299" text-anchor="middle" font-size="10.5" font-family="monospace" fill="#334155">published_at (NULL = pendiente)</text>
+    <line x1="330" y1="120" x2="410" y2="228" stroke="#555" stroke-width="2.5" marker-end="url(#arr5)"/>
+    <text x="340" y="180" font-size="10.5" fill="#555">escribe</text>
+    <!-- proceso 2 -->
+    <rect x="455" y="15" width="390" height="190" rx="12" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="8 5"/>
+    <text x="470" y="40" font-size="12" font-weight="700" fill="#64748b">PROCESO 2: el worker (npm run worker:outbox)</text>
+    <rect x="480" y="60" width="180" height="70" rx="10" fill="#dcebf7" stroke="#3b82c4" stroke-width="2.5"/>
+    <text x="570" y="86" text-anchor="middle" font-size="12" font-weight="700" fill="#1d5a94">🔵 OutboxDispatcher</text>
+    <text x="570" y="104" text-anchor="middle" font-size="10.5" fill="#1d5a94">cada N segundos: SELECT</text>
+    <text x="570" y="119" text-anchor="middle" font-size="10.5" fill="#1d5a94">eventos con published_at NULL</text>
+    <rect x="700" y="60" width="125" height="70" rx="10" fill="#f3e8ff" stroke="#9061c2" stroke-width="2.5"/>
+    <text x="762" y="90" text-anchor="middle" font-size="12" font-weight="700" fill="#6b3fa0">📡 Broker real</text>
+    <text x="762" y="108" text-anchor="middle" font-size="10" fill="#6b3fa0">(aquí: solo console.log)</text>
+    <line x1="660" y1="95" x2="692" y2="95" stroke="#555" stroke-width="2.5" marker-end="url(#arr5)"/>
+    <line x1="500" y1="240" x2="545" y2="135" stroke="#555" stroke-width="2.5" marker-end="url(#arr5)"/>
+    <text x="530" y="195" font-size="10.5" fill="#555">lee y marca</text>
+    <text x="530" y="210" font-size="10.5" fill="#555">published_at</text>
+  </svg>
+  </div>
+
+  <ul>
+    <li><strong>Escribir en la tabla outbox</strong> puede ir en la <em>misma transacción</em> que el pedido → o se guardan ambos, o ninguno. Atomicidad conseguida. 🎯</li>
+    <li>El <strong>dispatcher</strong> es un bucle infinito: cada 5 s coge hasta 100 eventos pendientes, los publica, y los marca con <code>published_at = NOW()</code>.</li>
+    <li>Usa el truco SQL <code>FOR UPDATE SKIP LOCKED</code>: si arrancas varios workers a la vez, cada uno coge eventos distintos sin pisarse.</li>
+    <li>En este proyecto «publicar» es solo un <code>console.log</code> — el hueco donde iría Kafka/RabbitMQ está señalado en el código.</li>
+  </ul>
+
+  <div class="tip">✅ <strong>Siguiente paso:</strong> tenemos puertos (⚙️) y adaptadores (🔌)… pero ¿quién decide cuál se enchufa a cuál? Eso pasa en <a class="xref" onclick="goTo('t-comp')">🧩 Composición</a>.</div>
+</section>
+
+<!-- ══════════════════════════ COMPOSICIÓN ══════════════════════════ -->
+<section id="t-comp" class="tab-content">
+  <h2>🧩 La Composición: donde se cablea todo <span class="chip comp">🟢 src/composition/</span></h2>
+  <p class="lead">Ninguna clase del proyecto crea sus propias dependencias. Entonces… ¿quién hace todos los <code>new</code>? Esta capa. Se le llama <strong>Composition Root</strong>: el único lugar del programa donde se instancian clases concretas y se conectan unas con otras. Ocurre una sola vez, al arrancar.</p>
+
+  <div class="idea">🛋️ <strong>Analogía IKEA:</strong> el dominio y la aplicación son las piezas del mueble, con sus agujeros estándar (los puertos). La infraestructura son los tornillos y bisagras compatibles (los adaptadores). El <strong>container</strong> es la persona que monta el mueble siguiendo las instrucciones: decide qué tornillo va en qué agujero. Las piezas nunca se montan solas.</div>
+
+  <h3>El arranque completo, paso a paso (main.ts)</h3>
+  <div class="flow">
+    <div class="fstep l-comp"><div class="who">1. <code>config.ts</code> lee y valida el <code>.env</code></div><div class="what">Con Zod: si falta una variable o tiene un valor raro (p. ej. <code>PORT=abc</code>), el proceso muere al arrancar con un mensaje claro. Mejor fallar pronto que a medianoche en producción.</div></div>
+    <div class="farrow">▼</div>
+    <div class="fstep l-comp"><div class="who">2. <code>buildUnifiedContainer()</code> — la gran decisión</div><div class="what">Mira <code>config.DATABASE_TYPE</code> y construye el árbol de objetos correspondiente (ver diagrama de abajo).</div></div>
+    <div class="farrow">▼</div>
+    <div class="fstep l-infra"><div class="who">3. <code>buildServer(dependencies)</code></div><div class="what">Crea Fastify, instancia el <code>OrderController</code> pasándole los casos de uso ya montados, y registra las rutas (<code>POST /orders</code>, <code>POST /orders/:sku/items</code>, <code>GET /health</code>).</div></div>
+    <div class="farrow">▼</div>
+    <div class="fstep l-infra"><div class="who">4. <code>server.listen({ host, port })</code></div><div class="what">Se abre el puerto 3000. La app ya acepta peticiones. 🚀</div></div>
+    <div class="farrow">▼ <small>…y cuando llega Ctrl+C o un kill…</small></div>
+    <div class="fstep l-comp"><div class="who">5. Graceful shutdown: <code>cleanup()</code></div><div class="what">Al recibir SIGINT/SIGTERM: primero cierra el servidor HTTP (deja de aceptar peticiones), luego cierra el pool de Postgres. Nada queda a medias.</div></div>
+  </div>
+
+  <h3>La decisión del contenedor unificado</h3>
+  <div class="svgwrap">
+  <svg width="840" height="360" viewBox="0 0 840 360" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, sans-serif">
+    <defs>
+      <marker id="arr6" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#1e6f42"/></marker>
+    </defs>
+    <rect x="310" y="15" width="220" height="60" rx="10" fill="#ddf2e5" stroke="#3fa66a" stroke-width="2.5"/>
+    <text x="420" y="40" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1e6f42">🟢 buildUnifiedContainer()</text>
+    <text x="420" y="60" text-anchor="middle" font-size="11" fill="#1e6f42">¿qué dice config.DATABASE_TYPE?</text>
+    <line x1="360" y1="75" x2="215" y2="120" stroke="#1e6f42" stroke-width="2.5" marker-end="url(#arr6)"/>
+    <line x1="480" y1="75" x2="625" y2="120" stroke="#1e6f42" stroke-width="2.5" marker-end="url(#arr6)"/>
+    <text x="250" y="100" text-anchor="end" font-size="12" font-weight="600" fill="#1e6f42">"memory"</text>
+    <text x="592" y="100" font-size="12" font-weight="600" fill="#1e6f42">"postgres"</text>
+    <!-- memoria -->
+    <rect x="40" y="130" width="350" height="200" rx="12" fill="#fbfcfe" stroke="#3fa66a" stroke-width="2"/>
+    <text x="215" y="158" text-anchor="middle" font-size="13" font-weight="700" fill="#1e6f42">container.ts (modo memoria)</text>
+    <text x="60" y="188" font-size="11.5" fill="#334155">• OrderRepository → <tspan font-weight="700">InMemoryOrderRepository</tspan></text>
+    <text x="60" y="212" font-size="11.5" fill="#334155">• PricingService → StaticPricingService</text>
+    <text x="60" y="236" font-size="11.5" fill="#334155">• EventBus → <tspan font-weight="700">NoopEventBus</tspan> (no hace nada)</text>
+    <text x="60" y="260" font-size="11.5" fill="#334155">• Logger → PinoLogger</text>
+    <text x="60" y="284" font-size="11.5" fill="#334155">• CreateOrder + AddItemToOrder normales</text>
+    <text x="60" y="312" font-size="11" fill="#64748b">Sin BD, sin transacciones. Ideal para aprender y testear.</text>
+    <!-- postgres -->
+    <rect x="450" y="130" width="360" height="200" rx="12" fill="#fbfcfe" stroke="#3fa66a" stroke-width="2"/>
+    <text x="630" y="158" text-anchor="middle" font-size="13" font-weight="700" fill="#1e6f42">postgres-container.ts + extras (modo postgres)</text>
+    <text x="470" y="188" font-size="11.5" fill="#334155">• OrderRepository → <tspan font-weight="700">PostgresOrderRepository</tspan></text>
+    <text x="470" y="212" font-size="11.5" fill="#334155">• EventBus → <tspan font-weight="700">OutboxEventBus</tspan> (tabla outbox)</text>
+    <text x="470" y="236" font-size="11.5" fill="#334155">• UnitOfWork → PgUnitOfWork (transacciones)</text>
+    <text x="470" y="260" font-size="11.5" fill="#334155">• CreateOrder usa la variante <tspan font-weight="700">CreateOrderWithUoW</tspan></text>
+    <text x="470" y="284" font-size="11.5" fill="#334155">• cleanup() cierra el pool de conexiones</text>
+    <text x="470" y="312" font-size="11" fill="#64748b">Persistencia real + eventos garantizados (outbox).</text>
+  </svg>
+  </div>
+
+  <div class="warn">⚠️ <strong>Lo importante:</strong> el servidor HTTP y el controller reciben «un objeto con dos casos de uso y un logger» (<code>ServerDependencies</code>) y <strong>no tienen ni idea</strong> de qué rama del diagrama se eligió. Esa es la prueba de que la arquitectura funciona: puedes cambiar toda la infraestructura de golpe y las capas internas ni se enteran.</div>
+
+  <h3>Así se ve el cableado en código (modo memoria)</h3>
+  <pre><code><span class="c">// composition/container.ts — el ÚNICO sitio con "new" de clases concretas</span>
+<span class="k">export function</span> <span class="f">buildContainer</span>(): Dependencies {
+  <span class="c">// 1. Adaptadores de infraestructura 🔵</span>
+  <span class="k">const</span> orderRepository = <span class="k">new</span> <span class="f">InMemoryOrderRepository</span>()
+  <span class="k">const</span> pricingService  = <span class="k">new</span> <span class="f">StaticPricingService</span>()
+  <span class="k">const</span> eventBus        = <span class="k">new</span> <span class="f">NoopEventBus</span>()
+  <span class="k">const</span> logger          = <span class="k">new</span> <span class="f">PinoLogger</span>()
+
+  <span class="c">// 2. Casos de uso 🔴, con los adaptadores "enchufados" por constructor</span>
+  <span class="k">const</span> createOrderUseCase    = <span class="k">new</span> <span class="f">CreateOrder</span>(orderRepository, eventBus)
+  <span class="k">const</span> addItemToOrderUseCase = <span class="k">new</span> <span class="f">AddItemToOrder</span>(orderRepository, pricingService, eventBus)
+
+  <span class="c">// 3. Se devuelve todo junto: el server cogerá lo que necesite</span>
+  <span class="k">return</span> { orderRepository, pricingService, eventBus, logger,
+           createOrderUseCase, addItemToOrderUseCase }
+}</code></pre>
+  <p>Fíjate: <code>CreateOrder</code> pide un <code>OrderRepository</code> (interface) y aquí le damos un <code>InMemoryOrderRepository</code> (clase concreta). TypeScript lo acepta porque la clase cumple el contrato (<code>implements OrderRepository</code>). Ese momento — «pido la interface, me dan la implementación» — <strong>es</strong> la inversión de dependencias en acción.</p>
+
+  <div class="tip">✅ <strong>Siguiente paso:</strong> si el TypeScript de los ejemplos aún te suena a chino en algunos puntos, la pestaña <a class="xref" onclick="goTo('t-ts')">📘 TypeScript del proyecto</a> repasa una a una todas las construcciones del lenguaje que usa este código.</div>
+</section>
+
+<!-- ══════════════════════════ TYPESCRIPT ══════════════════════════ -->
+<section id="t-ts" class="tab-content">
+  <h2>📘 El TypeScript que usa este proyecto, explicado</h2>
+  <p class="lead">No necesitas todo TypeScript para leer este código — necesitas exactamente estas 10 piezas. Cada una con un ejemplo real del proyecto.</p>
+
+  <h3>1. Tipos básicos en variables y funciones</h3>
+  <pre><code><span class="k">const</span> nombre: <span class="k">string</span> = <span class="s">"ORDER-001"</span>   <span class="c">// esta variable SOLO puede contener texto</span>
+<span class="k">function</span> <span class="f">sumar</span>(a: <span class="k">number</span>, b: <span class="k">number</span>): <span class="k">number</span> { <span class="k">return</span> a + b }
+<span class="c">//                ↑ tipo de cada parámetro        ↑ tipo de lo que devuelve</span></code></pre>
+  <p>La gracia: si escribes <code>sumar("hola", 3)</code>, el editor lo subraya en rojo <em>antes</em> de ejecutar nada. En JavaScript puro te enterarías en producción.</p>
+
+  <h3>2. <code>interface</code>: describir la forma de un objeto</h3>
+  <pre><code><span class="k">interface</span> <span class="f">CreateOrderDto</span> {
+  orderSku: <span class="k">string</span>      <span class="c">// "cualquier objeto de este tipo TIENE un campo orderSku de texto"</span>
+}</code></pre>
+  <p>Una interface no genera código: desaparece al compilar. Es solo una promesa que el compilador vigila. En este proyecto se usan para dos cosas: los DTOs (formas de datos) y los <strong>puertos</strong> (contratos de comportamiento, con métodos).</p>
+
+  <h3>3. <code>class</code> e <code>implements</code>: cumplir un contrato</h3>
+  <pre><code><span class="k">export class</span> <span class="f">InMemoryOrderRepository</span> <span class="k">implements</span> OrderRepository {
+  <span class="c">// "implements" = prometo tener TODOS los métodos que pide la interface.</span>
+  <span class="c">// Si me falta save() o findById(), TypeScript no compila.</span>
+}</code></pre>
+
+  <h3>4. <code>private readonly</code> y el atajo del constructor</h3>
+  <p>Dos palabras que verás por todas partes:</p>
+  <ul>
+    <li><code>private</code> → solo el código <em>de dentro de la clase</em> puede acceder al campo. Desde fuera, no existe.</li>
+    <li><code>readonly</code> → se asigna una vez (en el constructor) y nunca más. Inmutabilidad vigilada por el compilador.</li>
+  </ul>
+  <p>Y el atajo que más confunde al principio — estas dos clases son <strong>idénticas</strong>:</p>
+  <pre><code><span class="c">// Versión larga (JavaScript clásico)          // Atajo de TypeScript (el que usa el proyecto)</span>
+<span class="k">class</span> <span class="f">CreateOrder</span> {                             <span class="k">class</span> <span class="f">CreateOrder</span> {
+  <span class="k">private readonly</span> repo: OrderRepository          <span class="f">constructor</span>(
+  <span class="f">constructor</span>(repo: OrderRepository) {              <span class="k">private readonly</span> repo: OrderRepository
+    <span class="k">this</span>.repo = repo                              ) {}
+  }                                             }
+}</code></pre>
+  <p>Poner <code>private readonly</code> delante de un parámetro del constructor <strong>declara el campo y lo asigna automáticamente</strong>. Menos ruido, mismo resultado.</p>
+
+  <h3>5. Getters: métodos que parecen propiedades</h3>
+  <pre><code><span class="k">class</span> <span class="f">SKU</span> {
+  <span class="k">private readonly</span> _value: <span class="k">string</span>
+  <span class="k">get</span> <span class="f">value</span>(): <span class="k">string</span> { <span class="k">return this</span>._value }
+}
+
+<span class="k">const</span> sku = <span class="k">new</span> <span class="f">SKU</span>(<span class="s">"ORDER-001"</span>)
+sku.value          <span class="c">// ← se lee SIN paréntesis, como una propiedad</span>
+sku.value = <span class="s">"X"</span>    <span class="c">// ← ❌ error: no hay setter → solo lectura</span></code></pre>
+  <p>Es el truco de los VOs para exponer su valor sin dejar que nadie lo cambie.</p>
+
+  <h3>6. Genéricos: tipos con «huecos» — <code>Result&lt;T, E&gt;</code></h3>
+  <p>Un genérico es un tipo con parámetros, como una función pero de tipos. <code>T</code> y <code>E</code> son huecos que se rellenan en cada uso:</p>
+  <pre><code>Result&lt;Order, AppError&gt;   <span class="c">// éxito → trae un Order   | fallo → trae un AppError</span>
+Result&lt;<span class="k">void</span>,  AppError&gt;   <span class="c">// éxito → no trae nada     | fallo → trae un AppError</span>
+Promise&lt;Result&lt;Order, AppError&gt;&gt;  <span class="c">// y encima async: una promesa de un Result</span></code></pre>
+  <p>Ya usabas genéricos sin saberlo: <code>Array&lt;string&gt;</code>, <code>Map&lt;string, Order&gt;</code>, <code>Promise&lt;number&gt;</code>… mismo mecanismo.</p>
+
+  <h3>7. Uniones discriminadas: la magia detrás de Result ✨</h3>
+  <p>Esta es la pieza de TypeScript más elegante del proyecto. Una unión (<code>A | B</code>) significa «o esto o aquello». Si ambas variantes comparten un campo «etiqueta» (aquí <code>success</code>), TypeScript puede <strong>deducir en qué rama estás</strong> con un simple if:</p>
+  <pre><code><span class="k">type</span> <span class="f">Result</span>&lt;T, E&gt; =
+  | { success: <span class="k">true</span>;  data: T }      <span class="c">// variante 1: la etiqueta vale true</span>
+  | { success: <span class="k">false</span>; error: E }     <span class="c">// variante 2: la etiqueta vale false</span>
+
+<span class="k">if</span> (result.success) {
+  result.data    <span class="c">// ✅ TypeScript sabe que aquí EXISTE data</span>
+  result.error   <span class="c">// ❌ error de compilación: en esta rama no hay error</span>
+} <span class="k">else</span> {
+  result.error   <span class="c">// ✅ y aquí solo existe error</span>
+}</code></pre>
+  <p>A esto se le llama <em>narrowing</em> (estrechamiento): el if «estrecha» el tipo. Por eso el patrón Result es seguro: el compilador te impide físicamente usar el dato sin haber comprobado el éxito.</p>
+
+  <h3>8. <code>async/await</code> y <code>Promise</code></h3>
+  <p>Todo lo que tarda (base de datos, red) devuelve una <code>Promise</code>: una caja que <em>tendrá</em> un valor en el futuro. <code>await</code> pausa la función hasta que la caja se llena:</p>
+  <pre><code><span class="k">async</span> <span class="f">execute</span>(dto: CreateOrderDto): Promise&lt;Result&lt;<span class="k">void</span>, AppError&gt;&gt; {
+  <span class="k">const</span> saveResult = <span class="k">await</span> <span class="k">this</span>.orderRepository.save(order)
+  <span class="c">// ↑ sin await, saveResult sería la Promise (la caja), no el Result (el contenido)</span>
+}</code></pre>
+  <div class="warn">⚠️ Error típico de principiante: olvidar el <code>await</code>. El código compila (a veces con warning) pero comparas/usas la <em>caja</em> en vez del contenido, con resultados absurdos. Si un método devuelve <code>Promise&lt;...&gt;</code>, casi siempre quieres <code>await</code> delante.</div>
+
+  <h3>9. <code>Map</code>: el diccionario de JavaScript</h3>
+  <pre><code><span class="k">const</span> items = <span class="k">new</span> <span class="f">Map</span>&lt;<span class="k">string</span>, OrderItem&gt;()  <span class="c">// clave: string, valor: OrderItem</span>
+items.set(<span class="s">"LAPTOP-001"</span>, item)   <span class="c">// guardar (si la clave existía, la reemplaza)</span>
+items.get(<span class="s">"LAPTOP-001"</span>)         <span class="c">// leer → OrderItem o undefined</span>
+items.has(<span class="s">"LAPTOP-001"</span>)         <span class="c">// ¿existe? → boolean</span></code></pre>
+  <p>El proyecto lo usa en tres sitios: los items del pedido (clave = SKU del producto), el «almacén» del repositorio in-memory (clave = SKU del pedido) y el catálogo de precios.</p>
+
+  <h3>10. Detalles sueltos que verás en el código</h3>
+  <table>
+    <tr><th>Construcción</th><th>Qué significa</th></tr>
+    <tr><td><code>abstract class AppError</code></td><td>Clase «plantilla»: no se puede hacer <code>new AppError()</code>, solo heredar de ella (<code>class ValidationError extends AppError</code>).</td></tr>
+    <tr><td><code>{ ...dependencies, logger }</code></td><td>Operador <em>spread</em>: copia todas las propiedades de un objeto dentro de otro (y añade/sobrescribe <code>logger</code>).</td></tr>
+    <tr><td><code>error instanceof Error</code></td><td>Pregunta en tiempo de ejecución: «¿este valor es un objeto de la clase Error?». Necesario porque en JS puedes lanzar cualquier cosa, no solo Errors.</td></tr>
+    <tr><td><code>result.error.type !== 'NOT_FOUND_ERROR'</code></td><td>Comparar la etiqueta del error para decidir. Los tipos literales (<code>readonly type = 'VALIDATION_ERROR'</code>) hacen que TypeScript conozca los valores posibles.</td></tr>
+    <tr><td><code>this.createOrder.bind(this)</code></td><td>«Fija» el <code>this</code> de un método. Necesario al pasar métodos como callbacks a Fastify: sin bind, dentro del método <code>this</code> sería undefined.</td></tr>
+    <tr><td><code>null as any</code>, <code>pool as any</code></td><td>«Apaga» el chequeo de tipos en ese punto. Es un parche pragmático (el propio código lo reconoce en comentarios) — evítalo en tu propio código salvo emergencias.</td></tr>
+    <tr><td><code>import ... from './x.js'</code></td><td>Los imports acaban en <code>.js</code> aunque los archivos sean <code>.ts</code>: es lo que exige Node con módulos ES — la extensión se refiere al archivo <em>ya compilado</em>.</td></tr>
+  </table>
+</section>
+
+<!-- ══════════════════════════ GLOSARIO ══════════════════════════ -->
+<section id="t-glosario" class="tab-content">
+  <h2>📖 Glosario rápido</h2>
+  <p class="lead">Todos los términos de estos apuntes, en orden de aparición mental. Úsalo como chuleta.</p>
+  <table>
+    <tr><th style="width:220px">Término</th><th>En una frase</th></tr>
+    <tr><td><strong>Clean Architecture</strong></td><td>Organizar el código en capas donde las dependencias solo apuntan hacia el centro (el negocio), para que la tecnología sea reemplazable y el negocio testeable.</td></tr>
+    <tr><td><strong>Regla de la dependencia</strong></td><td>Un anillo solo importa código de anillos más internos, nunca de los externos.</td></tr>
+    <tr><td><strong>Entidad</strong> <span class="chip domain">🟡</span></td><td>Objeto de negocio con identidad propia y ciclo de vida (aquí: <code>Order</code>).</td></tr>
+    <tr><td><strong>Aggregate Root</strong> <span class="chip domain">🟡</span></td><td>La entidad «jefa» de un grupo: la única puerta para modificar lo que contiene (<code>Order</code> manda sobre sus <code>OrderItem</code>).</td></tr>
+    <tr><td><strong>Value Object (VO)</strong> <span class="chip domain">🟡</span></td><td>Valor inmutable con validación incorporada y sin identidad: dos con el mismo valor son iguales (<code>SKU</code>, <code>Money</code>, <code>Quantity</code>).</td></tr>
+    <tr><td><strong>Evento de dominio</strong> <span class="chip domain">🟡</span></td><td>Registro inmutable de algo que ya ocurrió (<code>OrderCreated</code>). La entidad los acumula; el caso de uso los publica.</td></tr>
+    <tr><td><strong>Caso de uso</strong> <span class="chip app">🔴</span></td><td>Una acción completa del sistema, escrita como receta paso a paso (<code>CreateOrder</code>).</td></tr>
+    <tr><td><strong>Puerto</strong> <span class="chip app">🔴</span></td><td>Interface que declara qué necesita la aplicación del mundo exterior, sin decir cómo (<code>OrderRepository</code>).</td></tr>
+    <tr><td><strong>Adaptador</strong> <span class="chip infra">🔵</span></td><td>Clase concreta que implementa un puerto con una tecnología real (<code>PostgresOrderRepository</code>).</td></tr>
+    <tr><td><strong>DTO</strong></td><td>Objeto plano que solo transporta datos entre capas, sin lógica.</td></tr>
+    <tr><td><strong>Repositorio</strong></td><td>Adaptador que guarda/recupera entidades, escondiendo los detalles de almacenamiento.</td></tr>
+    <tr><td><strong>Result / Either</strong></td><td>Tipo de retorno que es «éxito con dato» o «fallo con error»; obliga a comprobar antes de usar.</td></tr>
+    <tr><td><strong>Inversión de dependencias</strong></td><td>El truco de que la infraestructura dependa de la aplicación (implementando sus interfaces) y no al revés.</td></tr>
+    <tr><td><strong>Inyección de dependencias (DI)</strong></td><td>Las clases reciben sus herramientas por el constructor en vez de crearlas ellas mismas.</td></tr>
+    <tr><td><strong>Composition Root</strong> <span class="chip comp">🟢</span></td><td>El único lugar del programa donde se hace <code>new</code> de clases concretas y se conecta todo (los containers).</td></tr>
+    <tr><td><strong>Unit of Work (UoW)</strong></td><td>Patrón que agrupa varias operaciones de BD en una transacción: o todas o ninguna (BEGIN/COMMIT/ROLLBACK).</td></tr>
+    <tr><td><strong>Patrón Outbox</strong></td><td>Guardar los eventos en una tabla de tu propia BD (misma transacción que los datos) y publicarlos después con un worker. Evita perder o duplicar avisos.</td></tr>
+    <tr><td><strong>Graceful shutdown</strong></td><td>Cerrar ordenadamente al recibir la señal de apagado: dejar de aceptar peticiones, terminar las pendientes, cerrar conexiones.</td></tr>
+    <tr><td><strong>Pool de conexiones</strong></td><td>Conjunto de conexiones a la BD que se reutilizan (abrir una conexión nueva por petición sería lentísimo).</td></tr>
+    <tr><td><strong>SKU</strong></td><td><em>Stock Keeping Unit</em>: código identificador de un producto (o aquí, también del pedido).</td></tr>
+    <tr><td><strong>Idempotente</strong></td><td>Operación que da el mismo resultado aunque la repitas (p. ej. el UPSERT del repositorio).</td></tr>
+  </table>
+
+  <div class="card">
+    <h3 style="margin-top:0">🎓 Ruta de estudio recomendada con este proyecto</h3>
+    <ol>
+      <li>Relee <a class="xref" onclick="goTo('t-viaje')">🚀 El viaje de una petición</a> con el código abierto al lado, archivo por archivo.</li>
+      <li>Arranca la app en modo memoria (<span class="kbd">npm run dev</span>) y lanza los curl de la <a class="xref" onclick="goTo('t-vision')">visión general</a>. Mira los logs.</li>
+      <li>Rompe cosas a propósito: manda un SKU de 2 letras, una cantidad negativa, un producto inexistente. Observa qué error devuelve y <em>busca en el código dónde nació ese error</em>.</li>
+      <li>Lee los tests de <code>tests/domain/</code>: son la especificación ejecutable de las reglas de negocio.</li>
+      <li>Cuando lo tengas claro, pasa a modo Postgres y repite, mirando las tablas con un cliente SQL.</li>
+      <li>Reto final: añade un caso de uso nuevo (p. ej. <code>GET /orders/:sku</code> que devuelva el pedido con su total). Necesitarás tocar: controller 🔵, un caso de uso nuevo 🔴 y el container 🟢. El dominio 🟡 ya lo tiene todo.</li>
+    </ol>
+  </div>
+</section>
+
+</main>
+
+<footer>Apuntes generados para el proyecto <strong>clean-orders-ts (Parte 2)</strong> · Máster BS — Aplicando Clean Architecture con TypeScript</footer>
+
+<script>
+function goTo(id) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  var btn = document.querySelector('.tab-btn[data-tab="' + id + '"]');
+  if (btn) btn.classList.add('active');
+  window.scrollTo({ top: 0 });
+}
+</script>
+</body>
+</html>

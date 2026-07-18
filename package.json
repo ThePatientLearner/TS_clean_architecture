@@ -1,0 +1,31 @@
+{
+  "name": "clean-orders-ts",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "worker:outbox": "tsx src/infrastructure/messaging/outbox-dispatcher.ts",
+    "dev": "tsx main.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "fastify": "^4.28.1",
+    "fastify-plugin": "^5.0.1",
+    "pg": "^8.12.0",
+    "pino": "^9.0.0",
+    "pino-pretty": "^11.2.2",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.10.2",
+    "eslint": "^9.0.0",
+    "tsx": "^4.15.7",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}
